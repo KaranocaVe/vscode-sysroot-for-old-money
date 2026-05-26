@@ -88,36 +88,58 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            binutils \
-            bzip2 \
-            ca-certificates \
-            curl \
-            file \
-            flex \
-            g++ \
-            gawk \
-            gcc \
-            gperf \
-            gpgv \
-            help2man \
-            libncurses-dev \
-            libtool \
-            libtool-bin \
-            make \
-            meson \
-            ninja-build \
-            patch \
-            python3-dev \
-            rsync \
-            texinfo \
-            unzip \
-            wget \
-            xz-utils
+          log_dir="${{ github.workspace }}/.work/${{ matrix.target }}/logs"
+          log_file="$log_dir/apt-install.log"
+          mkdir -p "$log_dir"
+
+          echo "Installing build dependencies"
+          {
+            echo "# Install build dependencies"
+            echo "Started: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo
+            sudo apt-get update
+            sudo apt-get install -y \
+              autoconf \
+              automake \
+              bison \
+              binutils \
+              bzip2 \
+              ca-certificates \
+              curl \
+              file \
+              flex \
+              g++ \
+              gawk \
+              gcc \
+              gperf \
+              gpgv \
+              help2man \
+              libncurses-dev \
+              libtool \
+              libtool-bin \
+              make \
+              meson \
+              ninja-build \
+              patch \
+              python3-dev \
+              rsync \
+              texinfo \
+              unzip \
+              wget \
+              xz-utils
+          } >>"$log_file" 2>&1 || {
+            echo "Dependency installation failed. Full log: $log_file"
+            echo "::group::Last 200 lines of apt-install.log"
+            tail -n 200 "$log_file"
+            echo "::endgroup::"
+            exit 1
+          }
+
+          {
+            echo "## ${{ matrix.target }}"
+            echo "- Install build dependencies: success"
+            echo "- Dependency log: \`$log_file\`"
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Build sysroot
         env:
@@ -134,6 +156,14 @@ jobs:
           name: ${{ matrix.asset }}
           path: .work/${{ matrix.target }}/dist/${{ matrix.asset }}
           if-no-files-found: error
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.target }}
+          path: .work/${{ matrix.target }}/logs
+          if-no-files-found: ignore
 
   release:
     needs:
