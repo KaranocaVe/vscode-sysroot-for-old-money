@@ -1,16 +1,14 @@
 # vscode-sysroot-for-old-money
 
-给旧版 glibc Linux 主机使用的 VS Code Remote-SSH sysroot。  
-VS Code Remote-SSH sysroots for older glibc-based Linux hosts.
+给旧版 glibc Linux 主机使用的固定规格 VS Code Remote-SSH sysroot。  
+Fixed VS Code Remote-SSH sysroots for older glibc-based Linux hosts.
 
-这个仓库对应 [Remote Development FAQ](https://code.visualstudio.com/docs/remote/faq) 里“旧版 glibc
-主机通过自备 sysroot 继续运行新版 VS Code Server”的 workaround。每当
-`microsoft/vscode` 发布新的 stable 版，这个仓库的 GitHub Actions 会自动构建
-对应的 sysroot，并发布到本仓库的 GitHub Release。  
-This repository follows the workaround described in
-[vscode-remote-faq.md](./vscode-remote-faq.md): when `microsoft/vscode`
-publishes a new stable release, GitHub Actions in this repository builds the
-matching sysroots and publishes them as GitHub Releases.
+这个仓库对应 [Remote Development FAQ](https://code.visualstudio.com/docs/remote/faq)
+里“旧版 glibc 主机通过自备 sysroot 继续运行新版 VS Code Server”的 workaround。  
+This repository follows the workaround described in the
+[Remote Development FAQ](https://code.visualstudio.com/docs/remote/faq) for
+running newer VS Code Server builds on older glibc-based Linux hosts with a
+custom sysroot.
 
 ## 这是什么 / What This Is
 
@@ -18,9 +16,8 @@ matching sysroots and publishes them as GitHub Releases.
 的发行版。老机器如果还是更低版本的 glibc，可以通过下面三个环境变量让
 Remote-SSH 在安装 server 时用你提供的 sysroot 来打补丁：  
 Starting with VS Code `1.99`, the official prebuilt Linux server only supports
-distributions with `glibc >= 2.28`. If your remote machine is older, you can
-still use Remote-SSH by providing a custom sysroot through these three
-environment variables:
+distributions with `glibc >= 2.28`. Older remote machines can still use
+Remote-SSH by providing a custom sysroot through these variables:
 
 - `VSCODE_SERVER_CUSTOM_GLIBC_LINKER`
 - `VSCODE_SERVER_CUSTOM_GLIBC_PATH`
@@ -29,15 +26,37 @@ environment variables:
 这个仓库发布的就是配套 sysroot。  
 This repository publishes those sysroots.
 
-## Release 里有什么 / What Each Release Contains
+## 重要说明 / Important Note
 
-每个 release 都按 VS Code 版本命名：  
-Each release is named after a VS Code version:
+这里的构建产物是**固定规格的 sysroot**，不是“按每个 VS Code 版本重新定制”
+的产物。  
+The artifacts here are **fixed sysroot builds**, not custom sysroots rebuilt for
+every individual VS Code version.
 
-- tag 形如 / tag format: `vscode-1.121.0`
+当前固定规格：  
+Current fixed baseline:
 
-每个 release 默认包含：  
-Each release normally includes:
+- `glibc 2.28`
+- `gcc 10.5.0`
+- `x86_64` target
+- `aarch64` target
+
+也就是说：  
+That means:
+
+- `glibc-2.28-gcc-10.5.0` 这个 release 对应的是一套固定 sysroot
+- 它和某个具体 VS Code patch 版本没有一一绑定关系
+- 只要 VS Code 仍然兼容这套 `glibc 2.28` 基线，就不需要反复重建
+
+## Release 里有什么 / What The Release Contains
+
+当前默认 release tag：  
+Current default release tag:
+
+- `glibc-2.28-gcc-10.5.0`
+
+默认包含：  
+Included assets:
 
 - `x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
 - `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
@@ -69,8 +88,7 @@ The remote host needs:
    before Remote-SSH starts VS Code Server
 
 如果你不确定远端机器架构，可以先在远端执行：  
-If you are not sure about the remote CPU architecture, run this on the remote
-host first:
+If you are not sure about the remote CPU architecture, run this first:
 
 ```sh
 uname -m
@@ -86,8 +104,8 @@ Common results:
 
 ## x86_64 / amd64 远端主机 / x86_64 or amd64 Remote Host
 
-下载 release 里的这个文件：  
-Download this asset from the release:
+下载这个文件：  
+Download this asset:
 
 - `x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
 
@@ -132,8 +150,8 @@ printf '%s\n' "$VSCODE_SERVER_CUSTOM_GLIBC_PATH" | tr ':' '\n'
 
 ## arm64 / aarch64 远端主机 / arm64 or aarch64 Remote Host
 
-下载 release 里的这个文件：  
-Download this asset from the release:
+下载这个文件：  
+Download this asset:
 
 - `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
 
@@ -196,23 +214,26 @@ If these variables are not visible when Remote-SSH starts the server, VS Code
 will still perform the default glibc check and continue to fail on older
 systems.
 
-## 自动构建 / Automated Builds
+## 自动构建 / Build Automation
 
 workflow 在：  
 The workflow lives at:
 
-- [.github/workflows/build-sysroot-on-vscode-release.yml](.github/workflows/build-sysroot-on-vscode-release.yml)
+- [.github/workflows/build-sysroot.yml](.github/workflows/build-sysroot.yml)
 
 行为：  
 Behavior:
 
-- 定时轮询 `microsoft/vscode` 最新 stable release  
-  Poll the latest stable release from `microsoft/vscode`
-- 如果本仓库还没有对应的 `vscode-<version>` release，就启动构建  
-  Build when this repository does not yet have a matching `vscode-<version>`
-  release
-- 也支持 `workflow_dispatch` 手动补跑  
-  Also supports manual backfills through `workflow_dispatch`
+- 默认不再轮询每个 VS Code 版本  
+  It no longer polls every VS Code version
+- 只在 workflow 手动触发或构建定义本身变更时运行  
+  It runs only on manual dispatch or when the build definition itself changes
+- 默认发布固定 tag：`glibc-2.28-gcc-10.5.0`  
+  By default it publishes the fixed tag `glibc-2.28-gcc-10.5.0`
+- 如果你更新了 toolchain、glibc 基线、目标架构或上游脚本，再改 release tag
+  重新发布  
+  If you change the toolchain, glibc baseline, target architectures, or vendored
+  upstream scripts, update the release tag and publish again
 
 ## 构建来源 / Build Inputs
 

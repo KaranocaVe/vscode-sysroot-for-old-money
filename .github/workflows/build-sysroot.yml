@@ -1,58 +1,60 @@
-name: Build sysroot on VS Code release
+name: Build sysroot
 
 on:
-  schedule:
-    - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
-      vscode_version:
-        description: VS Code stable version to build, for example 1.121.0
+      release_tag:
+        description: Release tag to publish, for example glibc-2.28-gcc-10.5.0
         required: false
+        default: glibc-2.28-gcc-10.5.0
         type: string
       force_rebuild:
         description: Rebuild even if this repository already has a matching release
         required: false
         default: false
         type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/build-sysroot.yml
+      - scripts/build-sysroot.sh
+      - third_party/vscode-linux-build-agent/**
 
 permissions:
   contents: write
 
 concurrency:
-  group: sysroot-${{ github.event.inputs.vscode_version || 'latest' }}
+  group: sysroot-${{ github.event.inputs.release_tag || 'glibc-2.28-gcc-10.5.0' }}
   cancel-in-progress: false
+
+env:
+  DEFAULT_RELEASE_TAG: glibc-2.28-gcc-10.5.0
 
 jobs:
   detect:
     runs-on: ubuntu-24.04
     outputs:
       should_build: ${{ steps.detect.outputs.should_build }}
-      vscode_version: ${{ steps.detect.outputs.vscode_version }}
       release_tag: ${{ steps.detect.outputs.release_tag }}
     steps:
-      - name: Resolve target VS Code version
+      - name: Resolve release tag
         id: detect
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_VERSION: ${{ github.event.inputs.vscode_version }}
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
           FORCE_REBUILD: ${{ github.event.inputs.force_rebuild || 'false' }}
           REPOSITORY: ${{ github.repository }}
+          DEFAULT_RELEASE_TAG: ${{ env.DEFAULT_RELEASE_TAG }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -n "${INPUT_VERSION}" ]; then
-            version="${INPUT_VERSION}"
+          if [ -n "${INPUT_RELEASE_TAG}" ]; then
+            release_tag="${INPUT_RELEASE_TAG}"
           else
-            version="$(gh api repos/microsoft/vscode/releases/latest --jq '.tag_name')"
+            release_tag="${DEFAULT_RELEASE_TAG}"
           fi
-
-          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Unexpected VS Code version: $version" >&2
-            exit 1
-          fi
-
-          release_tag="vscode-${version}"
 
           if [ "${FORCE_REBUILD}" = "true" ]; then
             should_build=true
@@ -63,7 +65,6 @@ jobs:
           fi
 
           {
-            echo "vscode_version=$version"
             echo "release_tag=$release_tag"
             echo "should_build=$should_build"
           } >> "$GITHUB_OUTPUT"
@@ -201,20 +202,24 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.detect.outputs.release_tag }}
-          name: VS Code ${{ needs.detect.outputs.vscode_version }} sysroots
+          name: Sysroot ${{ needs.detect.outputs.release_tag }}
           generate_release_notes: false
-          make_latest: false
+          make_latest: true
           files: |
             dist/*.tar.gz
             dist/SHA256SUMS
           body: |
-            Sysroot release for VS Code `${{ needs.detect.outputs.vscode_version }}`.
+            Fixed sysroot release for the older-glibc Remote-SSH workaround described in `vscode-remote-faq.md`.
 
-            Assets in this release are intended for the older-glibc Remote-SSH workaround described in `vscode-remote-faq.md`.
+            This release is not tied to a specific VS Code version. It packages a fixed sysroot baseline:
+            - glibc `2.28`
+            - gcc `10.5.0`
+            - x86_64 and aarch64 targets
 
-            Included targets:
+            Included assets:
             - `x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
             - `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
+            - `SHA256SUMS`
 
             Remote host prerequisites:
             - `patchelf >= 0.18`
