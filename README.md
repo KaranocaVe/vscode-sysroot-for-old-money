@@ -3,7 +3,7 @@
 给旧版 glibc Linux 主机使用的 VS Code Remote-SSH sysroot。  
 VS Code Remote-SSH sysroots for older glibc-based Linux hosts.
 
-这个仓库对应 [vscode-remote-faq.md](./vscode-remote-faq.md) 里“旧版 glibc
+这个仓库对应 [Remote Development FAQ](https://code.visualstudio.com/docs/remote/faq) 里“旧版 glibc
 主机通过自备 sysroot 继续运行新版 VS Code Server”的 workaround。每当
 `microsoft/vscode` 发布新的 stable 版，这个仓库的 GitHub Actions 会自动构建
 对应的 sysroot，并发布到本仓库的 GitHub Release。  
