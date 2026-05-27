@@ -33,34 +33,31 @@ This repository publishes those sysroots.
 The artifacts here are **fixed sysroot builds**, not custom sysroots rebuilt for
 every individual VS Code version.
 
-当前固定规格：  
-Current fixed baseline:
-
-- `glibc 2.28`
-- `gcc 10.5.0`
-- `x86_64` target
-- `aarch64` target
+当前仓库支持“固定 profile 集合”，不是只支持唯一一套产物。  
+This repository supports fixed profile sets, not just one single output.
 
 也就是说：  
 That means:
 
-- `glibc-2.28-gcc-10.5.0` 这个 release 对应的是一套固定 sysroot
+- release 对应的是一组明确的 sysroot profile
 - 它和某个具体 VS Code patch 版本没有一一绑定关系
-- 只要 VS Code 仍然兼容这套 `glibc 2.28` 基线，就不需要反复重建
+- 只要需求没变，就不需要反复重建
 
 ## Release 里有什么 / What The Release Contains
 
-当前默认 release tag：  
-Current default release tag:
+当前内建 profile 集合：  
+Built-in profile sets:
+
+- `default`
+  - `x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
+  - `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
+- `arm64-kernel-4.18`
+  - `aarch64-linux-gnu-glibc-2.28-gcc-8.5.0-kernel-4.18.0.tar.gz`
+
+默认 release tag：  
+Default release tag:
 
 - `glibc-2.28-gcc-10.5.0`
-
-默认包含：  
-Included assets:
-
-- `x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
-- `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
-- `SHA256SUMS`
 
 注意：  
 Notes:
@@ -150,10 +147,18 @@ printf '%s\n' "$VSCODE_SERVER_CUSTOM_GLIBC_PATH" | tr ':' '\n'
 
 ## arm64 / aarch64 远端主机 / arm64 or aarch64 Remote Host
 
-下载这个文件：  
-Download this asset:
+根据你的远端主机要求选择对应文件。  
+Choose the asset that matches your remote host requirements.
+
+常规 arm64：  
+Default arm64:
 
 - `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
+
+较低内核基线 arm64：  
+Lower-kernel-baseline arm64:
+
+- `aarch64-linux-gnu-glibc-2.28-gcc-8.5.0-kernel-4.18.0.tar.gz`
 
 示例步骤：  
 Example:
@@ -228,12 +233,15 @@ Behavior:
   It no longer polls every VS Code version
 - 只在 workflow 手动触发或构建定义本身变更时运行  
   It runs only on manual dispatch or when the build definition itself changes
-- 默认发布固定 tag：`glibc-2.28-gcc-10.5.0`  
-  By default it publishes the fixed tag `glibc-2.28-gcc-10.5.0`
-- 如果你更新了 toolchain、glibc 基线、目标架构或上游脚本，再改 release tag
-  重新发布  
-  If you change the toolchain, glibc baseline, target architectures, or vendored
-  upstream scripts, update the release tag and publish again
+- 可以通过 `profile_set` 选择要构建的 sysroot 集合  
+  You can choose which sysroot set to build through `profile_set`
+- 可以通过 `release_tag` 指定发布 tag  
+  You can set the published release tag through `release_tag`
+- 如果你更新了 toolchain、glibc 基线、最低内核、目标架构或上游脚本，再改
+  profile 和 release tag 重新发布  
+  If you change the toolchain, glibc baseline, minimum kernel, target
+  architectures, or vendored upstream scripts, publish a new profile set and
+  release tag
 
 ## 构建来源 / Build Inputs
 

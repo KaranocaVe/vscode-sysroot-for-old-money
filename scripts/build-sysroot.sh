@@ -17,11 +17,12 @@ CTNG_PREFIX="$BUILD_DIR/crosstool-ng"
 
 usage() {
   cat <<'EOF'
-Usage: build-sysroot.sh <target>
+Usage: build-sysroot.sh <profile>
 
-Targets:
-  x64    Build x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz
-  arm64  Build aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz
+Profiles:
+  x64-glibc-2.28-gcc-10.5.0
+  arm64-glibc-2.28-gcc-10.5.0
+  arm64-glibc-2.28-gcc-8.5.0-kernel-4.18.0
 EOF
 }
 
@@ -146,23 +147,52 @@ install_ctng() {
 
 target_config() {
   case "$1" in
-    x64)
+    x64-glibc-2.28-gcc-10.5.0)
       echo "config=$THIRD_PARTY_DIR/x86_64-gcc-10.5.0-glibc-2.28.config"
+      echo "linux_version="
+      echo "glibc_min_kernel="
       echo "tuple=x86_64-linux-gnu"
       echo "sysroot_arch=amd64"
       echo "archive=x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz"
       ;;
-    arm64)
+    arm64-glibc-2.28-gcc-10.5.0)
       echo "config=$THIRD_PARTY_DIR/aarch64-gcc-10.5.0-glibc-2.28.config"
+      echo "linux_version="
+      echo "glibc_min_kernel="
       echo "tuple=aarch64-linux-gnu"
       echo "sysroot_arch=arm64"
       echo "archive=aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz"
+      ;;
+    arm64-glibc-2.28-gcc-8.5.0-kernel-4.18.0)
+      echo "config=$THIRD_PARTY_DIR/aarch64-gcc-8.5.0-glibc-2.28.config"
+      echo "linux_version=4.18.0"
+      echo "glibc_min_kernel=4.18.0"
+      echo "tuple=aarch64-linux-gnu"
+      echo "sysroot_arch=arm64"
+      echo "archive=aarch64-linux-gnu-glibc-2.28-gcc-8.5.0-kernel-4.18.0.tar.gz"
       ;;
     *)
       usage >&2
       exit 1
       ;;
   esac
+}
+
+prepare_config() {
+  local source_config="$1"
+  local output_config="$2"
+  local linux_version="$3"
+  local glibc_min_kernel="$4"
+
+  cp "$source_config" "$output_config"
+
+  if [ -n "$linux_version" ]; then
+    perl -0pi -e "s/CT_LINUX_VERSION=\"[^\"]+\"/CT_LINUX_VERSION=\"${linux_version}\"/" "$output_config"
+  fi
+
+  if [ -n "$glibc_min_kernel" ]; then
+    perl -0pi -e "s/CT_GLIBC_MIN_KERNEL=\"[^\"]+\"/CT_GLIBC_MIN_KERNEL=\"${glibc_min_kernel}\"/" "$output_config"
+  fi
 }
 
 main() {
@@ -172,6 +202,7 @@ main() {
   fi
 
   require_cmd curl
+  require_cmd perl
   require_cmd sha512sum
   require_cmd tar
   require_cmd nproc
@@ -191,8 +222,15 @@ main() {
   mkdir -p "$build_root"
 
   log "Preparing ${tuple}"
-  cp "$config" "$build_root/.config"
+  prepare_config "$config" "$build_root/.config" "$linux_version" "$glibc_min_kernel"
   append_summary "- Log directory: \`$LOG_DIR\`"
+  append_summary "- Archive: \`$archive\`"
+  if [ -n "$linux_version" ]; then
+    append_summary "- Linux headers: \`$linux_version\`"
+  fi
+  if [ -n "$glibc_min_kernel" ]; then
+    append_summary "- glibc min kernel: \`$glibc_min_kernel\`"
+  fi
 
   run_logged \
     "Running ct-ng build for ${tuple}" \

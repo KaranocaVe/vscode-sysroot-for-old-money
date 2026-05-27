@@ -8,6 +8,14 @@ on:
         required: false
         default: glibc-2.28-gcc-10.5.0
         type: string
+      profile_set:
+        description: Which sysroot profile set to build
+        required: false
+        default: default
+        type: choice
+        options:
+          - default
+          - arm64-kernel-4.18
       force_rebuild:
         description: Rebuild even if this repository already has a matching release
         required: false
@@ -30,6 +38,7 @@ concurrency:
 
 env:
   DEFAULT_RELEASE_TAG: glibc-2.28-gcc-10.5.0
+  DEFAULT_PROFILE_SET: default
 
 jobs:
   detect:
@@ -37,15 +46,18 @@ jobs:
     outputs:
       should_build: ${{ steps.detect.outputs.should_build }}
       release_tag: ${{ steps.detect.outputs.release_tag }}
+      profile_set: ${{ steps.detect.outputs.profile_set }}
     steps:
       - name: Resolve release tag
         id: detect
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          INPUT_PROFILE_SET: ${{ github.event.inputs.profile_set }}
           FORCE_REBUILD: ${{ github.event.inputs.force_rebuild || 'false' }}
           REPOSITORY: ${{ github.repository }}
           DEFAULT_RELEASE_TAG: ${{ env.DEFAULT_RELEASE_TAG }}
+          DEFAULT_PROFILE_SET: ${{ env.DEFAULT_PROFILE_SET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -54,6 +66,12 @@ jobs:
             release_tag="${INPUT_RELEASE_TAG}"
           else
             release_tag="${DEFAULT_RELEASE_TAG}"
+          fi
+
+          if [ -n "${INPUT_PROFILE_SET}" ]; then
+            profile_set="${INPUT_PROFILE_SET}"
+          else
+            profile_set="${DEFAULT_PROFILE_SET}"
           fi
 
           if [ "${FORCE_REBUILD}" = "true" ]; then
@@ -66,6 +84,7 @@ jobs:
 
           {
             echo "release_tag=$release_tag"
+            echo "profile_set=$profile_set"
             echo "should_build=$should_build"
           } >> "$GITHUB_OUTPUT"
 
@@ -76,11 +95,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x64
-            asset: x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz
-          - target: arm64
-            asset: aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz
+        include: ${{ fromJson(needs.detect.outputs.profile_set == 'arm64-kernel-4.18' && '[{"profile":"arm64-glibc-2.28-gcc-8.5.0-kernel-4.18.0","asset":"aarch64-linux-gnu-glibc-2.28-gcc-8.5.0-kernel-4.18.0.tar.gz"}]' || '[{"profile":"x64-glibc-2.28-gcc-10.5.0","asset":"x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz"},{"profile":"arm64-glibc-2.28-gcc-10.5.0","asset":"aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz"}]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -89,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          log_dir="${{ github.workspace }}/.work/${{ matrix.target }}/logs"
+          log_dir="${{ github.workspace }}/.work/${{ matrix.profile }}/logs"
           log_file="$log_dir/apt-install.log"
           mkdir -p "$log_dir"
 
@@ -137,33 +152,33 @@ jobs:
           }
 
           {
-            echo "## ${{ matrix.target }}"
+            echo "## ${{ matrix.profile }}"
             echo "- Install build dependencies: success"
             echo "- Dependency log: \`$log_file\`"
           } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Build sysroot
         env:
-          WORK_DIR: ${{ github.workspace }}/.work/${{ matrix.target }}
+          WORK_DIR: ${{ github.workspace }}/.work/${{ matrix.profile }}
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/build-sysroot.sh
-          scripts/build-sysroot.sh "${{ matrix.target }}"
+          scripts/build-sysroot.sh "${{ matrix.profile }}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
-          path: .work/${{ matrix.target }}/dist/${{ matrix.asset }}
+          path: .work/${{ matrix.profile }}/dist/${{ matrix.asset }}
           if-no-files-found: error
 
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: logs-${{ matrix.target }}
-          path: .work/${{ matrix.target }}/logs
+          name: logs-${{ matrix.profile }}
+          path: .work/${{ matrix.profile }}/logs
           if-no-files-found: ignore
 
   release:
@@ -211,14 +226,13 @@ jobs:
           body: |
             Fixed sysroot release for the older-glibc Remote-SSH workaround described in `vscode-remote-faq.md`.
 
-            This release is not tied to a specific VS Code version. It packages a fixed sysroot baseline:
-            - glibc `2.28`
-            - gcc `10.5.0`
-            - x86_64 and aarch64 targets
+            This release is not tied to a specific VS Code version. It packages one selected sysroot profile set.
+
+            Profile set:
+            - `${{ needs.detect.outputs.profile_set }}`
 
             Included assets:
-            - `x86_64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
-            - `aarch64-linux-gnu-glibc-2.28-gcc-10.5.0.tar.gz`
+            - Uploaded artifacts from this workflow run
             - `SHA256SUMS`
 
             Remote host prerequisites:
