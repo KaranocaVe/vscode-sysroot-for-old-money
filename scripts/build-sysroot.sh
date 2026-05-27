@@ -165,7 +165,7 @@ target_config() {
       ;;
     arm64-glibc-2.28-gcc-8.5.0-kernel-4.18.0)
       echo "config=$THIRD_PARTY_DIR/aarch64-gcc-8.5.0-glibc-2.28.config"
-      echo "linux_version=4.18.0"
+      echo "linux_version=4.18"
       echo "glibc_min_kernel=4.18.0"
       echo "tuple=aarch64-linux-gnu"
       echo "sysroot_arch=arm64"
